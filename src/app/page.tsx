@@ -221,7 +221,7 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 w-full px-4 md:px-6 pt-5 max-w-4xl mx-auto">
+      <main className="flex-1 w-full px-3 sm:px-6 pt-4 sm:pt-6 pb-24 md:pb-12 max-w-4xl mx-auto">
         {isWeaknessDestroyerActive ? (
           <WeaknessDestroyerView
             attempts={attempts}

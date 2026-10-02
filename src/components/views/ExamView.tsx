@@ -261,7 +261,7 @@ export const ExamView: React.FC<ExamViewProps> = ({ onExamComplete, onExitExam }
             <span className="text-xs font-mono text-[var(--color-muted)] uppercase tracking-wider">
               Select Examination Format
             </span>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <button
                 onClick={() => setExamType('rapid_50')}
                 className={`p-4 rounded-xl border text-left transition-colors cursor-pointer ${
@@ -458,7 +458,7 @@ export const ExamView: React.FC<ExamViewProps> = ({ onExamComplete, onExitExam }
             </button>
           </div>
 
-          <div className="grid grid-cols-10 gap-1.5 max-h-48 overflow-y-auto p-1">
+          <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-1.5 max-h-48 overflow-y-auto p-1">
             {examQuestions.map((q, idx) => {
               const st = questionStates[q.id];
               let bg = 'bg-[var(--color-surface-2)] text-[var(--color-muted)] border-[var(--color-border)]';

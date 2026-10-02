@@ -253,14 +253,14 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
         </div>
 
         {/* Action Controls Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-[var(--color-border)]">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t border-[var(--color-border)]">
+          <div className="flex items-center justify-between sm:justify-start gap-2">
             {/* Hint System Button */}
             {!isSubmitted && (
               <button
                 onClick={handleRevealNextHint}
                 disabled={activeHintIndex >= 2}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-muted)] hover:text-[var(--color-primary)] hover:border-[var(--color-border-hover)] transition-colors cursor-pointer disabled:opacity-50"
+                className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-muted)] hover:text-[var(--color-primary)] hover:border-[var(--color-border-hover)] transition-colors cursor-pointer disabled:opacity-50 flex-1 sm:flex-none"
               >
                 <Lightbulb size={14} className={activeHintIndex >= 0 ? 'text-[var(--color-warning)]' : ''} />
                 <span>
@@ -281,23 +281,23 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
             {!isSubmitted ? (
               <button
                 onClick={handleSubmit}
                 disabled={selectedOption === null}
-                className="px-5 py-2.5 rounded-lg text-xs font-semibold tracking-wide uppercase bg-[var(--color-primary)] text-[var(--color-bg)] hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer shadow-sm"
+                className="w-full sm:w-auto px-5 py-2.5 rounded-lg text-xs font-semibold tracking-wide uppercase bg-[var(--color-primary)] text-[var(--color-bg)] hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer shadow-sm text-center"
               >
                 Submit Answer
               </button>
             ) : (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
                 {/* Generate Harder Variation button for verified questions */}
                 {question.sourceType === 'verified_past' && onGenerateHarderVariation && (
                   <button
                     onClick={() => onGenerateHarderVariation(question)}
                     disabled={isGeneratingVariation}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-[var(--color-accent)] text-[var(--color-accent)] hover:bg-[var(--color-accent-subtle)] transition-colors cursor-pointer"
+                    className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-[var(--color-accent)] text-[var(--color-accent)] hover:bg-[var(--color-accent-subtle)] transition-colors cursor-pointer"
                   >
                     <Sparkles size={13} className={isGeneratingVariation ? 'animate-spin' : ''} />
                     <span>{isGeneratingVariation ? 'Generating...' : 'PAST → HARD Mode'}</span>
@@ -306,7 +306,7 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
 
                 <button
                   onClick={onNextQuestion}
-                  className="flex items-center gap-1.5 px-5 py-2.5 rounded-lg text-xs font-semibold tracking-wide uppercase bg-[var(--color-primary)] text-[var(--color-bg)] hover:opacity-90 transition-all cursor-pointer"
+                  className="flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-lg text-xs font-semibold tracking-wide uppercase bg-[var(--color-primary)] text-[var(--color-bg)] hover:opacity-90 transition-all cursor-pointer"
                 >
                   <span>Next Question</span>
                   <ArrowRight size={14} />

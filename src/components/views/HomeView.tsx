@@ -172,7 +172,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
       </div>
 
       {/* Special Modes Quick Bar */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {/* Destroy My Weakness */}
         <button
           onClick={onOpenWeaknessDestroyer}
