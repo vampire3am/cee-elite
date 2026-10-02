@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Question, Subject, Difficulty } from '@/types';
-import { INITIAL_QUESTION_BANK } from '@/lib/questionBank';
+import { generateDynamicQuestion } from '@/lib/proceduralGenerator';
 
 interface GenerateRequestPayload {
   subject: Subject;
@@ -17,32 +17,6 @@ interface GenerateRequestPayload {
   };
 }
 
-function generateOfflineQuestion(payload: GenerateRequestPayload): Question {
-  const { subject, topic, difficulty = 'hard', isVariation, baseQuestion } = payload;
-  const pool = INITIAL_QUESTION_BANK.filter(q => q.subject === subject);
-  const selectedBase = (topic ? pool.find(q => q.topic.toLowerCase().includes(topic.toLowerCase())) : null) 
-    || pool[Math.floor(Math.random() * pool.length)]
-    || INITIAL_QUESTION_BANK[0];
-
-  const salt = Math.floor(Math.random() * 899) + 100;
-
-  return {
-    ...selectedBase,
-    id: `gen-${Date.now()}-${salt}`,
-    sourceType: isVariation ? 'ai_variation' : 'ai_generated',
-    verificationStatus: 'ai_generated',
-    difficulty: difficulty,
-    originalPastQuestionId: isVariation && baseQuestion ? baseQuestion.id : selectedBase.id,
-    question: isVariation
-      ? `[Coupled Variation · Level ${difficulty.toUpperCase()}] ${selectedBase.question}`
-      : selectedBase.question,
-    chapter: selectedBase.chapter,
-    topic: selectedBase.topic,
-    source: null,
-    year: null
-  };
-}
-
 export async function POST(req: NextRequest) {
   try {
     const body: GenerateRequestPayload = await req.json();
@@ -53,9 +27,9 @@ export async function POST(req: NextRequest) {
     const apiKey = process.env.GEMINI_API_KEY || clientKey;
 
     if (!apiKey) {
-      // Seamless offline algorithmic generation fallback when no API key is provided
-      const fallbackQ = generateOfflineQuestion(body);
-      return NextResponse.json({ question: fallbackQ, mode: 'procedural_fallback' });
+      // Procedural permutation and dynamic calculation engine when no API key is provided
+      const dynamicQ = generateDynamicQuestion(subject, topic, difficulty, isVariation, baseQuestion);
+      return NextResponse.json({ question: dynamicQ, mode: 'procedural_dynamic' });
     }
 
     const systemInstruction = `You are the lead academic question architect for the Nepal Common Entrance Examination (CEE / MECEE-BL) for MBBS and BDS.
@@ -159,8 +133,8 @@ ${difficulty === 'elite'
     if (!apiResponse.ok) {
       const errText = await apiResponse.text().catch(() => '');
       console.warn('Gemini API call failed, using high-yield fallback generator:', errText);
-      const fallbackQ = generateOfflineQuestion(body);
-      return NextResponse.json({ question: fallbackQ, mode: 'procedural_fallback' });
+      const dynamicQ = generateDynamicQuestion(subject, topic, difficulty, isVariation, baseQuestion);
+      return NextResponse.json({ question: dynamicQ, mode: 'procedural_dynamic' });
     }
 
     const data = await apiResponse.json();
