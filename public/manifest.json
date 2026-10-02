@@ -1,0 +1,18 @@
+{
+  "name": "CEE ELITE — AI CEE Prep Platform",
+  "short_name": "CEE ELITE",
+  "description": "Minimalist study operating system and AI question engine for Nepal Medical Entrance (MECEE-BL).",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0A0A0A",
+  "theme_color": "#0A0A0A",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
