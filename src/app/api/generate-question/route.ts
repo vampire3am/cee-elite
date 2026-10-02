@@ -110,7 +110,7 @@ ${difficulty === 'elite'
       ]
     };
 
-    const requestUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    const requestUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
 
     const apiResponse = await fetch(requestUrl, {
       method: 'POST',
