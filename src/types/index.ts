@@ -36,6 +36,7 @@ export interface QuestionAttempt {
   timeSpentSeconds: number;
   timestamp: number;
   subject: Subject;
+  chapter: string;
   topic: string;
   difficulty: Difficulty;
   usedHints: number;
@@ -85,6 +86,9 @@ export interface MockExamResult {
   id: string;
   title: string;
   timestamp: number;
+  examMode?: 'full_200' | 'rapid_50' | 'chapter';
+  targetSubject?: Subject;
+  targetChapter?: string;
   totalQuestions: number;
   totalAttempted: number;
   correctCount: number;

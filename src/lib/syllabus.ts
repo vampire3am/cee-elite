@@ -6,6 +6,7 @@ export interface ChapterInfo {
   yieldScore: number; // 0 - 100 based on CEE past paper trend weight
   pastQuestionFrequency: number;
   conceptImportance: number;
+  weightageMarks?: number;
   topics: {
     name: string;
     yieldScore: number;
@@ -459,4 +460,16 @@ export const TOTAL_EXAM_MARKS = 200;
 export const TOTAL_EXAM_TIME_MINUTES = 180;
 export const NEGATIVE_MARKING_PENALTY = 0.25;
 export const CORRECT_MARK = 1.0;
+
+export function getChaptersForSubject(subject: Subject): ChapterInfo[] {
+  return CEE_SYLLABUS[subject] || [];
+}
+
+export function getAllChapters(): ChapterInfo[] {
+  return Object.values(CEE_SYLLABUS).flat();
+}
+
+export function findChapterByName(chapterName: string): ChapterInfo | undefined {
+  return getAllChapters().find(c => c.name.toLowerCase() === chapterName.toLowerCase());
+}
 

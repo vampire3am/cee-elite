@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Flame, 
   ArrowRight, 
@@ -8,10 +8,14 @@ import {
   ShieldAlert, 
   RotateCcw,
   Sparkles,
-  Layers
+  Layers,
+  BookOpen,
+  Target,
+  Award
 } from 'lucide-react';
-import { QuestionAttempt, Flashcard } from '@/types';
-import { getNextBestAction, computeTopicStats } from '@/lib/adaptive';
+import { QuestionAttempt, Flashcard, Subject } from '@/types';
+import { getNextBestAction, computeTopicStats, computeChapterStats } from '@/lib/adaptive';
+import { getChaptersForSubject } from '@/lib/syllabus';
 
 interface HomeViewProps {
   attempts: QuestionAttempt[];
@@ -20,6 +24,8 @@ interface HomeViewProps {
   onStartMode: (mode: string, params?: { subject?: string; difficulty?: string; topic?: string }) => void;
   onOpenRevision: () => void;
   onOpenWeaknessDestroyer: () => void;
+  onStartChapterPractice?: (subject: Subject, chapter: string) => void;
+  onStartChapterMock?: (subject: Subject, chapter: string) => void;
 }
 
 export const HomeView: React.FC<HomeViewProps> = ({
@@ -28,10 +34,15 @@ export const HomeView: React.FC<HomeViewProps> = ({
   streak,
   onStartMode,
   onOpenRevision,
-  onOpenWeaknessDestroyer
+  onOpenWeaknessDestroyer,
+  onStartChapterPractice,
+  onStartChapterMock
 }) => {
+  const [hubSubject, setHubSubject] = useState<Subject>('Physics');
+
   const nextAction = getNextBestAction(attempts);
   const topicStats = computeTopicStats(attempts);
+  const chapterStats = computeChapterStats(attempts);
 
   // Today's attempts calculation
   const todayStart = new Date();
@@ -52,7 +63,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const targetQuestions = 50;
   const progressPercent = Math.min(100, Math.round((todayTotal / targetQuestions) * 100));
 
-  // Weak topics (highest student weakness with at least 1 attempt or highest yield)
+  // Weak topics
   const weakTopics = topicStats
     .filter(t => t.attempts > 0 && t.accuracy < 75)
     .slice(0, 3);
@@ -74,12 +85,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
     { id: 'weak_topics', label: '🧠 WEAK TOPICS', mode: 'weak' },
     { id: 'past_questions', label: '📜 PAST QUESTIONS', mode: 'past' },
     { id: 'very_hard', label: '💀 VERY HARD', diff: 'very_hard' },
-    { id: 'biology', label: '🧬 BIOLOGY GRIND', subject: 'Biology' },
-    { id: 'chemistry', label: '⚗️ CHEMISTRY', subject: 'Chemistry' },
-    { id: 'physics', label: '⚛️ PHYSICS', subject: 'Physics' },
-    { id: 'mat', label: '⚡ MAT (MENTAL AGILITY)', subject: 'MAT' },
     { id: 'mixed', label: '🎯 MIXED CEE', mode: 'mixed' }
   ];
+
+  // Hub chapters
+  const hubChapters = getChaptersForSubject(hubSubject);
 
   return (
     <div className="w-full max-w-3xl mx-auto flex flex-col gap-6 pb-20 md:pb-12">
@@ -98,7 +108,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </div>
         </div>
         <p className="text-xs text-[var(--color-muted)]">
-          Hard questions. High-yield preparation. No nonsense.
+          Subject-First & Chapter-Wise Mastery. High-Yield & Hard.
         </p>
       </div>
 
@@ -134,12 +144,12 @@ export const HomeView: React.FC<HomeViewProps> = ({
         </div>
       </div>
 
-      {/* Next Best Action Card (Single Tap to Highest-Yield Study) */}
+      {/* Next Best Action Card (Targeted to Chapter & Topic) */}
       <div className="p-5 rounded-xl border border-[var(--color-accent)]/40 bg-[var(--color-accent-subtle)] relative overflow-hidden flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <span className="text-[11px] font-mono uppercase tracking-wider font-semibold text-[var(--color-accent)] flex items-center gap-1.5">
             <Sparkles size={13} />
-            NEXT BEST ACTION · ADAPTIVE CEE PRIORITY
+            NEXT BEST ACTION · ADAPTIVE CHAPTER PRIORITY
           </span>
           <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[var(--color-accent)]/20 text-[var(--color-accent)] font-semibold">
             Yield: {nextAction.yieldScore}
@@ -148,27 +158,143 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
         <div>
           <h2 className="text-lg md:text-xl font-bold tracking-tight text-[var(--color-primary)]">
-            {nextAction.topic}
+            {nextAction.chapter}
           </h2>
           <span className="text-xs text-[var(--color-muted)] block mt-0.5">
-            {nextAction.subject} · {nextAction.chapter} · {nextAction.recommendedDifficulty.replace('_', ' ').toUpperCase()}
+            {nextAction.subject} · {nextAction.topic} · {nextAction.recommendedDifficulty.replace('_', ' ').toUpperCase()}
           </span>
           <p className="text-xs text-[var(--color-muted)] mt-2 leading-relaxed">
             {nextAction.rationale}
           </p>
         </div>
 
-        <button
-          onClick={() => onStartMode('adaptive', { 
-            subject: nextAction.subject, 
-            topic: nextAction.topic, 
-            difficulty: nextAction.recommendedDifficulty 
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
+          <button
+            onClick={() => {
+              if (onStartChapterPractice) {
+                onStartChapterPractice(nextAction.subject, nextAction.chapter);
+              } else {
+                onStartMode('adaptive', { 
+                  subject: nextAction.subject, 
+                  topic: nextAction.topic, 
+                  difficulty: nextAction.recommendedDifficulty 
+                });
+              }
+            }}
+            className="py-2.5 px-4 rounded-lg bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold text-xs tracking-wide uppercase flex items-center justify-center gap-2 hover:opacity-90 transition-opacity cursor-pointer shadow-sm"
+          >
+            <Target size={14} />
+            <span>Practice Chapter</span>
+          </button>
+
+          <button
+            onClick={() => {
+              if (onStartChapterMock) {
+                onStartChapterMock(nextAction.subject, nextAction.chapter);
+              }
+            }}
+            className="py-2.5 px-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-primary)] font-semibold text-xs tracking-wide uppercase flex items-center justify-center gap-2 hover:border-[var(--color-accent)] transition-colors cursor-pointer"
+          >
+            <Zap size={14} className="text-[var(--color-warning)]" />
+            <span>Chapter Mock (20Q)</span>
+          </button>
+        </div>
+      </div>
+
+      {/* CHAPTER HUB: Subject-First -> Chapter Cards Grid */}
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <BookOpen size={16} className="text-[var(--color-accent)]" />
+            <span className="text-xs font-mono uppercase tracking-wider text-[var(--color-primary)] font-semibold">
+              CEE Chapter Hub
+            </span>
+          </div>
+          <span className="text-[11px] font-mono text-[var(--color-muted)]">
+            Select Subject → Pick Chapter
+          </span>
+        </div>
+
+        {/* Subject Pills */}
+        <div className="grid grid-cols-4 gap-2">
+          {(['Physics', 'Chemistry', 'Biology', 'MAT'] as const).map((sub) => (
+            <button
+              key={sub}
+              onClick={() => setHubSubject(sub)}
+              className={`py-2 px-3 rounded-lg text-xs font-semibold text-center transition-all cursor-pointer ${
+                hubSubject === sub
+                  ? 'bg-[var(--color-surface-2)] text-[var(--color-primary)] border border-[var(--color-accent)] shadow-sm'
+                  : 'bg-[var(--color-surface)] text-[var(--color-muted)] border border-[var(--color-border)] hover:text-[var(--color-primary)]'
+              }`}
+            >
+              {sub}
+            </button>
+          ))}
+        </div>
+
+        {/* Chapter Grid for the selected subject */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mt-1">
+          {hubChapters.map((ch) => {
+            const stat = chapterStats.find(s => s.chapter === ch.name);
+            return (
+              <div
+                key={ch.name}
+                className="p-3.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-border-hover)] transition-all flex flex-col justify-between gap-3"
+              >
+                <div>
+                  <div className="flex items-center justify-between text-[10px] font-mono mb-1">
+                    <span className="text-[var(--color-accent)] font-semibold bg-[var(--color-accent-subtle)] px-1.5 py-0.5 rounded">
+                      Yield {ch.yieldScore}
+                    </span>
+                    <span className="text-[var(--color-muted)]">
+                      ~{ch.weightageMarks ?? Math.round(ch.yieldScore / 10)} Marks
+                    </span>
+                  </div>
+
+                  <h3 className="text-xs font-bold text-[var(--color-primary)] line-clamp-1">
+                    {ch.name}
+                  </h3>
+
+                  <div className="flex items-center gap-2 text-[10px] font-mono text-[var(--color-muted)] mt-1">
+                    {stat && stat.attempts > 0 ? (
+                      <span className={stat.accuracy >= 75 ? 'text-[var(--color-success)]' : stat.accuracy >= 50 ? 'text-[var(--color-warning)]' : 'text-[var(--color-error)]'}>
+                        {stat.accuracy}% Accuracy ({stat.attempts} solved)
+                      </span>
+                    ) : (
+                      <span className="text-[var(--color-subtle)]">Not practiced yet</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-1.5 pt-2 border-t border-[var(--color-border)]">
+                  <button
+                    onClick={() => {
+                      if (onStartChapterPractice) {
+                        onStartChapterPractice(hubSubject, ch.name);
+                      }
+                    }}
+                    className="py-1.5 px-2 rounded-md bg-[var(--color-surface-2)] text-[var(--color-primary)] hover:border-[var(--color-accent)] border border-[var(--color-border)] text-[11px] font-semibold flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                  >
+                    <Target size={11} />
+                    <span>Practice</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      if (onStartChapterMock) {
+                        onStartChapterMock(hubSubject, ch.name);
+                      }
+                    }}
+                    className="py-1.5 px-2 rounded-md bg-[var(--color-primary)] text-[var(--color-bg)] text-[11px] font-semibold flex items-center justify-center gap-1 cursor-pointer hover:opacity-90 transition-opacity"
+                  >
+                    <Zap size={11} />
+                    <span>Mock (20Q)</span>
+                  </button>
+                </div>
+              </div>
+            );
           })}
-          className="mt-1 w-full py-2.5 px-4 rounded-lg bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold text-xs tracking-wide uppercase flex items-center justify-center gap-2 hover:opacity-90 transition-opacity cursor-pointer shadow-sm"
-        >
-          <span>Start Recommended Practice</span>
-          <ArrowRight size={14} />
-        </button>
+        </div>
       </div>
 
       {/* Special Modes Quick Bar */}
@@ -297,7 +423,6 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <button
               key={pill.id}
               onClick={() => onStartMode(pill.mode || pill.id, { 
-                subject: pill.subject, 
                 difficulty: pill.diff 
               })}
               className="p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-border-hover)] hover:bg-[var(--color-surface-2)] transition-colors text-left text-xs font-medium text-[var(--color-primary)] cursor-pointer"

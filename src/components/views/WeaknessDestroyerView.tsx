@@ -98,6 +98,7 @@ export const WeaknessDestroyerView: React.FC<WeaknessDestroyerViewProps> = ({
       timestamp: Date.now(),
       subject: currentQ.subject,
       topic: currentQ.topic,
+      chapter: currentQ.chapter || currentQ.topic,
       difficulty: currentQ.difficulty,
       usedHints
     };

@@ -150,6 +150,7 @@ ${rawAngle > 180 ? `Since this is a reflex angle, the acute angle is $360^\\circ
 
 export function generateDynamicQuestion(
   subject: Subject,
+  chapter?: string,
   topic?: string,
   difficulty: Difficulty = 'hard',
   isVariation?: boolean,
@@ -157,14 +158,20 @@ export function generateDynamicQuestion(
 ): Question {
   const salt = Math.floor(Math.random() * 100000);
 
-  // Check if we have a procedural calculation rule matching the subject
+  // Check if we have a procedural calculation rule matching the subject and topic/chapter
   const matchingRule = PROCEDURAL_RULES.find(r => 
-    r.subject === subject && (!topic || r.topicMatch.toLowerCase().includes(topic.toLowerCase()) || topic.toLowerCase().includes(r.topicMatch.toLowerCase()))
-  ) || PROCEDURAL_RULES.find(r => r.subject === subject);
+    r.subject === subject && (
+      (topic && (r.topicMatch.toLowerCase().includes(topic.toLowerCase()) || topic.toLowerCase().includes(r.topicMatch.toLowerCase()))) ||
+      (chapter && (r.topicMatch.toLowerCase().includes(chapter.toLowerCase()) || chapter.toLowerCase().includes(r.topicMatch.toLowerCase())))
+    )
+  ) || (chapter ? undefined : PROCEDURAL_RULES.find(r => r.subject === subject));
 
   if (matchingRule) {
     const custom = matchingRule.generate(salt);
-    const baseFallback = INITIAL_QUESTION_BANK.find(q => q.subject === subject) || INITIAL_QUESTION_BANK[0];
+    const baseFallback = INITIAL_QUESTION_BANK.find(q => 
+      q.subject === subject && (!chapter || q.chapter.toLowerCase() === chapter.toLowerCase())
+    ) || INITIAL_QUESTION_BANK.find(q => q.subject === subject) || INITIAL_QUESTION_BANK[0];
+
     return {
       ...baseFallback,
       ...custom,
@@ -173,14 +180,18 @@ export function generateDynamicQuestion(
       verificationStatus: 'ai_generated',
       difficulty,
       subject,
+      chapter: chapter || baseFallback.chapter,
       originalPastQuestionId: baseQuestion?.id
     } as Question;
   }
 
-  // Fallback to parameterized selection from our 87 verified question bank
+  // Fallback to parameterized selection from our verified question bank
   const pool = INITIAL_QUESTION_BANK.filter(q => q.subject === subject);
-  const base = (topic ? pool.find(q => q.topic.toLowerCase().includes(topic.toLowerCase())) : null)
-    || pool[salt % pool.length]
+  const chapterPool = chapter ? pool.filter(q => q.chapter.toLowerCase() === chapter.toLowerCase()) : [];
+  const effectivePool = chapterPool.length > 0 ? chapterPool : pool;
+
+  const base = (topic ? effectivePool.find(q => q.topic.toLowerCase().includes(topic.toLowerCase())) : null)
+    || effectivePool[salt % effectivePool.length]
     || INITIAL_QUESTION_BANK[0];
 
   return {
@@ -189,6 +200,7 @@ export function generateDynamicQuestion(
     sourceType: isVariation ? 'ai_variation' : 'ai_generated',
     verificationStatus: 'ai_generated',
     difficulty,
+    chapter: chapter || base.chapter,
     originalPastQuestionId: isVariation && baseQuestion ? baseQuestion.id : base.id,
     question: isVariation 
       ? `[Advanced Multi-Constraint Variation] ${base.question}`

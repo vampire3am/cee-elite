@@ -37,9 +37,17 @@ export default function App() {
   // Practice View dynamic parameters
   const [practiceParams, setPracticeParams] = useState<{
     subject?: Subject;
+    chapter?: string;
     difficulty?: Difficulty;
     topic?: string;
     mode?: string;
+  }>({});
+
+  // Exam View dynamic parameters (for chapter mocks and sprints)
+  const [examParams, setExamParams] = useState<{
+    initialExamType?: 'full_200' | 'rapid_50' | 'chapter';
+    initialSubject?: Subject;
+    initialChapter?: string;
   }>({});
 
   // Initialize DB, settings, online status
@@ -113,6 +121,26 @@ export default function App() {
     setActiveTab('practice');
   };
 
+  const handleStartChapterPractice = (subject: Subject, chapter: string) => {
+    setIsWeaknessDestroyerActive(false);
+    setPracticeParams({
+      subject,
+      chapter,
+      mode: 'chapter'
+    });
+    setActiveTab('practice');
+  };
+
+  const handleStartChapterMock = (subject: Subject, chapter: string) => {
+    setIsWeaknessDestroyerActive(false);
+    setExamParams({
+      initialExamType: 'chapter',
+      initialSubject: subject,
+      initialChapter: chapter
+    });
+    setActiveTab('mocks');
+  };
+
   const handleThemeChanged = (theme: 'dark' | 'light' | 'system') => {
     if (theme === 'light') {
       document.documentElement.classList.add('theme-light');
@@ -140,7 +168,7 @@ export default function App() {
           </span>
         </div>
 
-        {/* Hero Block (Strictly Minimal per Section 23/24) */}
+        {/* Hero Block */}
         <div className="my-auto py-12 flex flex-col gap-6 max-w-2xl">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-mono border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-muted)] w-fit">
             <span className="w-2 h-2 rounded-full bg-[var(--color-success)]" />
@@ -152,7 +180,7 @@ export default function App() {
               Prepare harder.
             </h1>
             <p className="text-base md:text-lg text-[var(--color-muted)] leading-relaxed font-normal">
-              AI-powered CEE practice built around high-yield concepts, difficult questions, and verified past questions.
+              AI-powered CEE practice built around high-yield concepts, chapter-wise mastery, and verified past questions.
             </p>
           </div>
 
@@ -171,19 +199,19 @@ export default function App() {
           <div className="pt-8 border-t border-[var(--color-border)] grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs font-mono text-[var(--color-muted)]">
             <div className="flex items-center gap-2">
               <span className="text-[var(--color-primary)] font-semibold">✓</span>
+              <span>Subject & Chapter First</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[var(--color-primary)] font-semibold">✓</span>
+              <span>20Q Chapter Mocks</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[var(--color-primary)] font-semibold">✓</span>
               <span>Hard Mode Default</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-[var(--color-primary)] font-semibold">✓</span>
               <span>High-Yield Engine</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[var(--color-primary)] font-semibold">✓</span>
-              <span>Verified Past Papers</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[var(--color-primary)] font-semibold">✓</span>
-              <span>PAST → HARD Variations</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-[var(--color-primary)] font-semibold">✓</span>
@@ -238,22 +266,29 @@ export default function App() {
                 onStartMode={handleStartMode}
                 onOpenRevision={() => setActiveTab('revision')}
                 onOpenWeaknessDestroyer={() => setIsWeaknessDestroyerActive(true)}
+                onStartChapterPractice={handleStartChapterPractice}
+                onStartChapterMock={handleStartChapterMock}
               />
             )}
 
             {activeTab === 'practice' && (
               <PracticeView
                 initialSubject={practiceParams.subject}
+                initialChapter={practiceParams.chapter}
                 initialDifficulty={practiceParams.difficulty}
                 initialTopic={practiceParams.topic}
                 initialMode={practiceParams.mode}
                 onAttemptSaved={refreshAppData}
                 onFlashcardCreated={refreshAppData}
+                onLaunchChapterMock={handleStartChapterMock}
               />
             )}
 
             {activeTab === 'mocks' && (
               <ExamView
+                initialExamType={examParams.initialExamType}
+                initialSubject={examParams.initialSubject}
+                initialChapter={examParams.initialChapter}
                 onExamComplete={refreshAppData}
                 onExitExam={() => setActiveTab('home')}
               />
@@ -261,8 +296,12 @@ export default function App() {
 
             {activeTab === 'revision' && (
               <RevisionView
-                onStartRetest={(ids) => {
-                  setPracticeParams({ mode: 'retest' });
+                onStartRetest={(ids, subject, chapter) => {
+                  setPracticeParams({ 
+                    mode: 'retest',
+                    subject,
+                    chapter
+                  });
                   setActiveTab('practice');
                 }}
               />
@@ -274,6 +313,8 @@ export default function App() {
                 mockHistory={mockHistory}
                 streak={streak}
                 onDataImported={refreshAppData}
+                onStartChapterPractice={handleStartChapterPractice}
+                onStartChapterMock={handleStartChapterMock}
               />
             )}
           </>

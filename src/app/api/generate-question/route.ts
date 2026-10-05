@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
 
     if (!apiKey) {
       // Procedural permutation and dynamic calculation engine when no API key is provided
-      const dynamicQ = generateDynamicQuestion(subject, topic, difficulty, isVariation, baseQuestion);
+      const dynamicQ = generateDynamicQuestion(subject, chapter, topic, difficulty, isVariation, baseQuestion);
       return NextResponse.json({ question: dynamicQ, mode: 'procedural_dynamic' });
     }
 
@@ -133,7 +133,7 @@ ${difficulty === 'elite'
     if (!apiResponse.ok) {
       const errText = await apiResponse.text().catch(() => '');
       console.warn('Gemini API call failed, using high-yield fallback generator:', errText);
-      const dynamicQ = generateDynamicQuestion(subject, topic, difficulty, isVariation, baseQuestion);
+      const dynamicQ = generateDynamicQuestion(subject, chapter, topic, difficulty, isVariation, baseQuestion);
       return NextResponse.json({ question: dynamicQ, mode: 'procedural_dynamic' });
     }
 

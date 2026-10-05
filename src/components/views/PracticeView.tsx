@@ -4,32 +4,45 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Question, Subject, Difficulty, QuestionAttempt } from '@/types';
 import { QuestionCard } from '../QuestionCard';
 import { db } from '@/lib/db';
+import { getChaptersForSubject, getAllChapters, CEE_SYLLABUS } from '@/lib/syllabus';
+import { computeChapterStats } from '@/lib/adaptive';
 import { 
   Sparkles, 
   RotateCcw, 
-  AlertCircle
+  AlertCircle,
+  ArrowLeft,
+  BookOpen,
+  Award,
+  ChevronRight,
+  Zap,
+  Target
 } from 'lucide-react';
 
 interface PracticeViewProps {
   initialSubject?: Subject;
+  initialChapter?: string;
   initialDifficulty?: Difficulty;
   initialTopic?: string;
   initialMode?: string;
   onAttemptSaved: (attempt: QuestionAttempt) => void;
   onFlashcardCreated: () => void;
+  onLaunchChapterMock?: (subject: Subject, chapter: string) => void;
 }
 
 export const PracticeView: React.FC<PracticeViewProps> = ({
   initialSubject,
+  initialChapter,
   initialDifficulty,
   initialTopic,
   initialMode,
   onAttemptSaved,
-  onFlashcardCreated
+  onFlashcardCreated,
+  onLaunchChapterMock
 }) => {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentIdx, setCurrentIdx] = useState<number>(0);
   const [selectedSubject, setSelectedSubject] = useState<Subject | 'All'>(initialSubject || 'All');
+  const [selectedChapter, setSelectedChapter] = useState<string | 'All'>(initialChapter || 'All');
   const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty | 'All'>(initialDifficulty || 'All');
   const [isGeneratingAi, setIsGeneratingAi] = useState<boolean>(false);
   const [isGeneratingVariation, setIsGeneratingVariation] = useState<boolean>(false);
@@ -37,14 +50,45 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
   const [sessionCorrect, setSessionCorrect] = useState<number>(0);
   const [sessionTotal, setSessionTotal] = useState<number>(0);
   const [activeVariationBase, setActiveVariationBase] = useState<Question | null>(null);
+  
+  // Chapter stats & bank counts for the chapter explorer
+  const [allBankQuestions, setAllBankQuestions] = useState<Question[]>([]);
+  const [attempts, setAttempts] = useState<QuestionAttempt[]>([]);
+  const [viewMode, setViewMode] = useState<'practice' | 'chapters'>(initialChapter ? 'practice' : 'practice');
 
-  // Load questions from local DB
+  // Update when initialChapter changes externally
+  useEffect(() => {
+    if (initialChapter) {
+      setSelectedChapter(initialChapter);
+      setViewMode('practice');
+    }
+    if (initialSubject) {
+      setSelectedSubject(initialSubject);
+    }
+  }, [initialChapter, initialSubject]);
+
+  // Load question counts and student attempts
+  const loadMetadata = useCallback(async () => {
+    const list = await db.getQuestions();
+    const atts = await db.getAttempts();
+    setAllBankQuestions(list);
+    setAttempts(atts);
+  }, []);
+
+  useEffect(() => {
+    loadMetadata();
+  }, [loadMetadata]);
+
+  // Load questions filtered by subject, chapter, difficulty
   const loadLocalQuestions = useCallback(async () => {
     const list = await db.getQuestions();
     
     let filtered = list;
     if (selectedSubject !== 'All') {
       filtered = filtered.filter(q => q.subject === selectedSubject);
+    }
+    if (selectedChapter !== 'All') {
+      filtered = filtered.filter(q => q.chapter === selectedChapter);
     }
     if (selectedDifficulty !== 'All') {
       filtered = filtered.filter(q => q.difficulty === selectedDifficulty);
@@ -61,7 +105,7 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
     const shuffled = [...filtered].sort(() => Math.random() - 0.5);
     setQuestions(shuffled);
     setCurrentIdx(0);
-  }, [selectedSubject, selectedDifficulty, initialTopic, initialMode]);
+  }, [selectedSubject, selectedChapter, selectedDifficulty, initialTopic, initialMode]);
 
   useEffect(() => {
     loadLocalQuestions();
@@ -89,11 +133,13 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
       timestamp: Date.now(),
       subject: currentQuestion.subject,
       topic: currentQuestion.topic,
+      chapter: currentQuestion.chapter,
       difficulty: currentQuestion.difficulty,
       usedHints
     };
 
     await db.saveAttempt(attempt);
+    setAttempts(prev => [attempt, ...prev]);
     onAttemptSaved(attempt);
 
     // If answer was incorrect, automatically offer/generate a spaced repetition flashcard item
@@ -122,7 +168,6 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
       setCurrentIdx(prev => prev + 1);
       setActiveVariationBase(null);
     } else {
-      // Loop or request new AI question
       loadLocalQuestions();
     }
   };
@@ -152,6 +197,7 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
     setAiError(null);
 
     const targetSubject = selectedSubject === 'All' ? 'Physics' : selectedSubject;
+    const targetChapter = selectedChapter === 'All' ? undefined : selectedChapter;
     const settings = db.getSettings();
 
     try {
@@ -163,6 +209,7 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
         },
         body: JSON.stringify({
           subject: targetSubject,
+          chapter: targetChapter,
           difficulty,
           topic: initialTopic
         })
@@ -176,7 +223,7 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
       const data = await res.json();
       if (data.question) {
         await db.saveQuestion(data.question);
-        // Prepend to current questions and display
+        setAllBankQuestions(prev => [data.question, ...prev]);
         setQuestions(prev => [data.question, ...prev]);
         setCurrentIdx(0);
         setActiveVariationBase(null);
@@ -225,6 +272,7 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
       const data = await res.json();
       if (data.question) {
         await db.saveQuestion(data.question);
+        setAllBankQuestions(prev => [data.question, ...prev]);
         setActiveVariationBase(baseQ);
         setQuestions(prev => [data.question, ...prev]);
         setCurrentIdx(0);
@@ -237,16 +285,31 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
     }
   };
 
+  // Compute chapter-wise statistics from attempts
+  const chapterStats = computeChapterStats(attempts);
+
+  // Get displayed chapters for chapter explorer
+  const displayedChapters = selectedSubject === 'All' 
+    ? getAllChapters() 
+    : getChaptersForSubject(selectedSubject).map(c => ({ ...c, subject: selectedSubject }));
+
   return (
     <div className="w-full max-w-3xl mx-auto flex flex-col gap-5 pb-24 md:pb-12">
-      {/* Controls & Filter Bar */}
+      {/* Subject Filter Tabs Bar */}
       <div className="p-3.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] flex flex-wrap items-center justify-between gap-3">
-        {/* Subject Filter Tabs */}
         <div className="flex items-center gap-1 overflow-x-auto py-0.5 max-w-full">
           {(['All', 'Physics', 'Chemistry', 'Biology', 'MAT'] as const).map(subj => (
             <button
               key={subj}
-              onClick={() => setSelectedSubject(subj)}
+              onClick={() => {
+                setSelectedSubject(subj);
+                if (subj !== 'All' && selectedChapter !== 'All') {
+                  const subjectChapters = getChaptersForSubject(subj).map(c => c.name);
+                  if (!subjectChapters.includes(selectedChapter)) {
+                    setSelectedChapter('All');
+                  }
+                }
+              }}
               className={`px-3 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap cursor-pointer ${
                 selectedSubject === subj
                   ? 'bg-[var(--color-surface-2)] text-[var(--color-primary)] font-semibold border border-[var(--color-border)]'
@@ -258,106 +321,255 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
           ))}
         </div>
 
-        {/* Difficulty Selection */}
+        {/* View Mode Toggle: Question Practice vs Chapter Directory */}
         <div className="flex items-center gap-2">
-          <select
-            value={selectedDifficulty}
-            onChange={(e) => setSelectedDifficulty(e.target.value as Difficulty | 'All')}
-            className="text-xs bg-[var(--color-surface-2)] border border-[var(--color-border)] text-[var(--color-primary)] px-2.5 py-1 rounded-md focus:outline-none"
-          >
-            <option value="All">All Difficulties</option>
-            <option value="medium">Medium</option>
-            <option value="hard">Hard (Default)</option>
-            <option value="very_hard">Very Hard</option>
-            <option value="elite">Elite</option>
-          </select>
-
-          {/* AI Generate New Question Button */}
           <button
-            onClick={() => handleGenerateAiQuestion(selectedDifficulty === 'All' ? 'hard' : selectedDifficulty)}
-            disabled={isGeneratingAi}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium bg-[var(--color-accent)] text-white hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-60"
+            onClick={() => setViewMode(viewMode === 'chapters' ? 'practice' : 'chapters')}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium border transition-colors cursor-pointer ${
+              viewMode === 'chapters'
+                ? 'border-[var(--color-accent)] bg-[var(--color-accent-subtle)] text-[var(--color-accent)]'
+                : 'border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-muted)] hover:text-[var(--color-primary)]'
+            }`}
           >
-            <Sparkles size={13} className={isGeneratingAi ? 'animate-spin' : ''} />
-            <span>{isGeneratingAi ? 'Synthesizing...' : 'AI Generate'}</span>
+            <BookOpen size={13} />
+            <span>{viewMode === 'chapters' ? 'Back to Questions' : 'Browse Chapters'}</span>
           </button>
         </div>
       </div>
 
-      {/* AI Error Notification (Graceful Fallback) */}
-      {aiError && (
-        <div className="p-3.5 rounded-lg border border-[var(--color-warning)]/30 bg-[var(--color-warning-subtle)] flex items-start gap-2.5 text-xs text-[var(--color-primary)]">
-          <AlertCircle size={16} className="text-[var(--color-warning)] shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <span className="font-semibold block text-[var(--color-warning)]">
-              AI service temporarily unavailable
+      {/* Chapter Explorer Grid View */}
+      {viewMode === 'chapters' ? (
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-mono uppercase tracking-wider text-[var(--color-muted)]">
+              {selectedSubject === 'All' ? 'All Official Syllabus Chapters' : `${selectedSubject} Chapters`}
             </span>
-            <span className="text-[var(--color-muted)] mt-0.5 block">
-              {aiError}. Continuing seamlessly from local verified question bank.
+            <span className="text-[11px] font-mono text-[var(--color-subtle)]">
+              {displayedChapters.length} Chapters
             </span>
           </div>
-          <button
-            onClick={() => setAiError(null)}
-            className="text-[var(--color-muted)] hover:text-[var(--color-primary)] text-xs font-mono"
-          >
-            Dismiss
-          </button>
-        </div>
-      )}
 
-      {/* Session Progress Tracker */}
-      <div className="flex items-center justify-between text-xs font-mono text-[var(--color-muted)] px-1">
-        <div>
-          <span>Question </span>
-          <span className="text-[var(--color-primary)] font-semibold">{questions.length > 0 ? currentIdx + 1 : 0}</span>
-          <span> of </span>
-          <span className="text-[var(--color-primary)]">{questions.length}</span>
-        </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {displayedChapters.map((ch) => {
+              const stat = chapterStats.find(s => s.chapter === ch.name);
+              const qCount = allBankQuestions.filter(q => q.chapter === ch.name).length;
+              const chSubject = 'subject' in ch ? (ch as any).subject as Subject : selectedSubject === 'All' ? 'Physics' : selectedSubject;
 
-        {sessionTotal > 0 && (
-          <div>
-            <span>Session: </span>
-            <span className="text-[var(--color-success)] font-semibold">{sessionCorrect}</span>
-            <span>/{sessionTotal} (</span>
-            <span>{Math.round((sessionCorrect / sessionTotal) * 100)}%</span>
-            <span>)</span>
+              return (
+                <div
+                  key={ch.name}
+                  className={`p-4 rounded-xl border transition-all flex flex-col justify-between gap-3 ${
+                    selectedChapter === ch.name
+                      ? 'border-[var(--color-accent)] bg-[var(--color-accent-subtle)]'
+                      : 'border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-border-hover)]'
+                  }`}
+                >
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-accent)] border border-[var(--color-border)]">
+                        Yield {ch.yieldScore}
+                      </span>
+                      <span className="text-[10px] font-mono text-[var(--color-muted)]">
+                        ~{ch.weightageMarks ?? Math.round(ch.yieldScore / 10)} Marks
+                      </span>
+                    </div>
+
+                    <h4 className="text-sm font-semibold text-[var(--color-primary)] line-clamp-2 mt-1">
+                      {ch.name}
+                    </h4>
+
+                    <div className="flex items-center gap-3 text-[11px] font-mono text-[var(--color-muted)] mt-1">
+                      <span>{qCount} Questions in Bank</span>
+                      {stat && stat.attempts > 0 && (
+                        <span className={stat.accuracy >= 75 ? 'text-[var(--color-success)]' : stat.accuracy >= 50 ? 'text-[var(--color-warning)]' : 'text-[var(--color-error)]'}>
+                          {stat.accuracy}% Acc ({stat.attempts} solved)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[var(--color-border)]">
+                    <button
+                      onClick={() => {
+                        setSelectedChapter(ch.name);
+                        if (selectedSubject === 'All' && 'subject' in ch) {
+                          setSelectedSubject((ch as any).subject);
+                        }
+                        setViewMode('practice');
+                      }}
+                      className="py-1.5 px-2.5 rounded-lg text-xs font-semibold bg-[var(--color-primary)] text-[var(--color-bg)] flex items-center justify-center gap-1 hover:opacity-90 transition-opacity cursor-pointer text-center"
+                    >
+                      <Target size={12} />
+                      <span>Practice</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        if (onLaunchChapterMock) {
+                          onLaunchChapterMock(chSubject, ch.name);
+                        }
+                      }}
+                      className="py-1.5 px-2.5 rounded-lg text-xs font-semibold border border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-primary)] hover:border-[var(--color-accent)] transition-colors flex items-center justify-center gap-1 cursor-pointer text-center"
+                    >
+                      <Zap size={12} className="text-[var(--color-warning)]" />
+                      <span>Mock (20Q)</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        )}
-      </div>
-
-      {/* Current Question View */}
-      {currentQuestion ? (
-        <QuestionCard
-          question={currentQuestion}
-          basePastQuestion={activeVariationBase}
-          onAnswer={handleAnswer}
-          onNextQuestion={handleNextQuestion}
-          onCreateFlashcard={handleCreateFlashcard}
-          onGenerateHarderVariation={handleGenerateHarderVariation}
-          isGeneratingVariation={isGeneratingVariation}
-        />
+        </div>
       ) : (
-        <div className="p-12 text-center rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] flex flex-col items-center gap-3">
-          <p className="text-sm text-[var(--color-muted)]">
-            No questions matching your current filter in local bank.
-          </p>
-          <div className="flex items-center gap-3 mt-2">
+        <>
+          {/* Active Chapter Breadcrumb Bar */}
+          {selectedChapter !== 'All' ? (
+            <div className="p-3.5 rounded-xl border border-[var(--color-accent)]/40 bg-[var(--color-accent-subtle)] flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <button
+                  onClick={() => setSelectedChapter('All')}
+                  className="p-1 rounded-md hover:bg-[var(--color-surface-2)] text-[var(--color-muted)] hover:text-[var(--color-primary)] transition-colors cursor-pointer shrink-0"
+                  title="Clear Chapter Filter"
+                >
+                  <ArrowLeft size={16} />
+                </button>
+                <div className="min-w-0">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-[var(--color-accent)] font-semibold block">
+                    {selectedSubject !== 'All' ? selectedSubject : 'Chapter Focused Practice'}
+                  </span>
+                  <span className="text-sm font-bold text-[var(--color-primary)] truncate block">
+                    {selectedChapter}
+                  </span>
+                </div>
+              </div>
+
+              {onLaunchChapterMock && (
+                <button
+                  onClick={() => onLaunchChapterMock(selectedSubject === 'All' ? 'Physics' : selectedSubject, selectedChapter)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-[var(--color-accent)]/60 bg-[var(--color-surface)] text-[var(--color-primary)] hover:border-[var(--color-accent)] transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer shadow-sm"
+                >
+                  <Zap size={13} className="text-[var(--color-warning)]" />
+                  <span>Start Mock (20Q)</span>
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] flex items-center justify-between text-xs">
+              <span className="text-[var(--color-muted)] font-mono">
+                Showing all chapters for {selectedSubject}. Want to focus on a single chapter?
+              </span>
+              <button
+                onClick={() => setViewMode('chapters')}
+                className="text-[var(--color-accent)] font-semibold hover:underline cursor-pointer ml-2"
+              >
+                Select Chapter →
+              </button>
+            </div>
+          )}
+
+          {/* Difficulty & AI Generation Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-[var(--color-muted)]">Difficulty:</span>
+              <select
+                value={selectedDifficulty}
+                onChange={(e) => setSelectedDifficulty(e.target.value as Difficulty | 'All')}
+                className="text-xs bg-[var(--color-surface-2)] border border-[var(--color-border)] text-[var(--color-primary)] px-2.5 py-1 rounded-md focus:outline-none"
+              >
+                <option value="All">All Difficulties</option>
+                <option value="medium">Medium</option>
+                <option value="hard">Hard (Default)</option>
+                <option value="very_hard">Very Hard</option>
+                <option value="elite">Elite</option>
+              </select>
+            </div>
+
             <button
-              onClick={() => { setSelectedSubject('All'); setSelectedDifficulty('All'); }}
-              className="px-4 py-2 rounded-lg text-xs font-medium border border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-primary)] cursor-pointer"
-            >
-              Reset Filters
-            </button>
-            <button
-              onClick={() => handleGenerateAiQuestion('hard')}
+              onClick={() => handleGenerateAiQuestion(selectedDifficulty === 'All' ? 'hard' : selectedDifficulty)}
               disabled={isGeneratingAi}
-              className="px-4 py-2 rounded-lg text-xs font-medium bg-[var(--color-accent)] text-white flex items-center gap-1.5 cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium bg-[var(--color-accent)] text-white hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-60"
             >
-              <Sparkles size={13} />
-              <span>Generate AI Question</span>
+              <Sparkles size={13} className={isGeneratingAi ? 'animate-spin' : ''} />
+              <span>{isGeneratingAi ? 'Synthesizing...' : `AI Generate ${selectedChapter !== 'All' ? 'for Chapter' : ''}`}</span>
             </button>
           </div>
-        </div>
+
+          {/* AI Error Notification (Graceful Fallback) */}
+          {aiError && (
+            <div className="p-3.5 rounded-lg border border-[var(--color-warning)]/30 bg-[var(--color-warning-subtle)] flex items-start gap-2.5 text-xs text-[var(--color-primary)]">
+              <AlertCircle size={16} className="text-[var(--color-warning)] shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <span className="font-semibold block text-[var(--color-warning)]">
+                  AI service temporarily unavailable
+                </span>
+                <span className="text-[var(--color-muted)] mt-0.5 block">
+                  {aiError}. Continuing seamlessly from local verified question bank.
+                </span>
+              </div>
+              <button
+                onClick={() => setAiError(null)}
+                className="text-[var(--color-muted)] hover:text-[var(--color-primary)] text-xs font-mono"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+
+          {/* Session Progress Tracker */}
+          <div className="flex items-center justify-between text-xs font-mono text-[var(--color-muted)] px-1">
+            <div>
+              <span>Question </span>
+              <span className="text-[var(--color-primary)] font-semibold">{questions.length > 0 ? currentIdx + 1 : 0}</span>
+              <span> of </span>
+              <span className="text-[var(--color-primary)]">{questions.length}</span>
+            </div>
+
+            {sessionTotal > 0 && (
+              <div>
+                <span>Session: </span>
+                <span className="text-[var(--color-success)] font-semibold">{sessionCorrect}</span>
+                <span>/{sessionTotal} (</span>
+                <span>{Math.round((sessionCorrect / sessionTotal) * 100)}%</span>
+                <span>)</span>
+              </div>
+            )}
+          </div>
+
+          {/* Current Question View */}
+          {currentQuestion ? (
+            <QuestionCard
+              question={currentQuestion}
+              basePastQuestion={activeVariationBase}
+              onAnswer={handleAnswer}
+              onNextQuestion={handleNextQuestion}
+              onCreateFlashcard={handleCreateFlashcard}
+              onGenerateHarderVariation={handleGenerateHarderVariation}
+              isGeneratingVariation={isGeneratingVariation}
+            />
+          ) : (
+            <div className="p-12 text-center rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] flex flex-col items-center gap-3">
+              <p className="text-sm text-[var(--color-muted)]">
+                No questions matching your current filter in local bank.
+              </p>
+              <div className="flex items-center gap-3 mt-2">
+                <button
+                  onClick={() => { setSelectedSubject('All'); setSelectedChapter('All'); setSelectedDifficulty('All'); }}
+                  className="px-4 py-2 rounded-lg text-xs font-medium border border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-primary)] cursor-pointer"
+                >
+                  Reset Filters
+                </button>
+                <button
+                  onClick={() => handleGenerateAiQuestion('hard')}
+                  disabled={isGeneratingAi}
+                  className="px-4 py-2 rounded-lg text-xs font-medium bg-[var(--color-accent)] text-white flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Sparkles size={13} />
+                  <span>Generate AI Question</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

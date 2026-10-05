@@ -2,7 +2,7 @@
 
 import React, { useState, useRef } from 'react';
 import { QuestionAttempt, Subject, MockExamResult, ExportDataPayload } from '@/types';
-import { computeTopicStats } from '@/lib/adaptive';
+import { computeTopicStats, computeChapterStats } from '@/lib/adaptive';
 import { db } from '@/lib/db';
 import { 
   BarChart3, 
@@ -12,7 +12,9 @@ import {
   Download, 
   Upload, 
   CheckCircle2, 
-  AlertCircle
+  AlertCircle,
+  Zap,
+  BookOpen
 } from 'lucide-react';
 
 interface StatsViewProps {
@@ -20,18 +22,24 @@ interface StatsViewProps {
   mockHistory: MockExamResult[];
   streak: { current: number; best: number };
   onDataImported: () => void;
+  onStartChapterPractice?: (subject: Subject, chapter: string) => void;
+  onStartChapterMock?: (subject: Subject, chapter: string) => void;
 }
 
 export const StatsView: React.FC<StatsViewProps> = ({
   attempts,
   mockHistory,
   streak,
-  onDataImported
+  onDataImported,
+  onStartChapterPractice,
+  onStartChapterMock
 }) => {
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [chapterFilterSubject, setChapterFilterSubject] = useState<Subject | 'All'>('All');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const topicStats = computeTopicStats(attempts);
+  const chapterStats = computeChapterStats(attempts);
 
   // Overall metrics
   const totalSolved = attempts.length;
@@ -64,6 +72,11 @@ export const StatsView: React.FC<StatsViewProps> = ({
   };
 
   const subjects: Subject[] = ['Physics', 'Chemistry', 'Biology', 'MAT'];
+
+  // Filtered chapters
+  const filteredChapterStats = chapterFilterSubject === 'All'
+    ? chapterStats
+    : chapterStats.filter(c => c.subject === chapterFilterSubject);
 
   // Export JSON handler
   const handleExport = async () => {
@@ -249,14 +262,97 @@ export const StatsView: React.FC<StatsViewProps> = ({
         </div>
       </div>
 
+      {/* CHAPTER MASTERY MATRIX */}
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <BookOpen size={16} className="text-[var(--color-accent)]" />
+            <span className="text-xs font-mono uppercase tracking-wider text-[var(--color-primary)] font-semibold">
+              Chapter Mastery Matrix
+            </span>
+          </div>
+
+          {/* Subject Filter Pills */}
+          <div className="flex items-center gap-1">
+            {(['All', 'Physics', 'Chemistry', 'Biology', 'MAT'] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => setChapterFilterSubject(s)}
+                className={`px-2 py-0.5 rounded text-[11px] font-mono transition-colors cursor-pointer ${
+                  chapterFilterSubject === s
+                    ? 'bg-[var(--color-primary)] text-[var(--color-bg)] font-bold'
+                    : 'text-[var(--color-muted)] hover:text-[var(--color-primary)] bg-[var(--color-surface-2)]'
+                }`}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="border border-[var(--color-border)] rounded-xl overflow-hidden text-xs">
+          <div className="divide-y divide-[var(--color-border)]">
+            {filteredChapterStats.map((ch) => (
+              <div
+                key={ch.chapter}
+                className="p-3.5 bg-[var(--color-surface)] flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--color-surface-2)] text-[var(--color-accent)] font-semibold border border-[var(--color-border)]">
+                      {ch.subject} · Yield {ch.yieldScore}
+                    </span>
+                    <span className="text-[10px] font-mono text-[var(--color-muted)]">
+                      Priority Score {ch.priorityScore}
+                    </span>
+                  </div>
+
+                  <span className="font-semibold text-sm text-[var(--color-primary)] block mt-1 truncate">
+                    {ch.chapter}
+                  </span>
+
+                  <div className="flex items-center gap-3 text-[11px] font-mono text-[var(--color-muted)] mt-1">
+                    <span>{ch.attempts} attempts</span>
+                    <span className={ch.accuracy >= 75 ? 'text-[var(--color-success)] font-semibold' : ch.accuracy >= 50 ? 'text-[var(--color-warning)] font-semibold' : 'text-[var(--color-error)] font-semibold'}>
+                      {ch.accuracy}% accuracy
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  {onStartChapterPractice && (
+                    <button
+                      onClick={() => onStartChapterPractice(ch.subject, ch.chapter)}
+                      className="px-2.5 py-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-primary)] hover:border-[var(--color-accent)] font-semibold text-xs flex items-center gap-1 cursor-pointer transition-colors"
+                    >
+                      <Target size={12} />
+                      <span>Practice</span>
+                    </button>
+                  )}
+                  {onStartChapterMock && (
+                    <button
+                      onClick={() => onStartChapterMock(ch.subject, ch.chapter)}
+                      className="px-2.5 py-1.5 rounded-lg bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold text-xs flex items-center gap-1 cursor-pointer hover:opacity-90 transition-opacity"
+                    >
+                      <Zap size={12} />
+                      <span>Mock (20Q)</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {/* High-Yield Topic Priority Matrix */}
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <span className="text-xs font-mono uppercase tracking-wider text-[var(--color-muted)]">
-            High-Yield Priority Matrix (App-Derived Priority)
+            High-Yield Topic Priority Matrix
           </span>
           <span className="text-[11px] font-mono text-[var(--color-subtle)]">
-            Adaptive Weight
+            Top Weaknesses
           </span>
         </div>
 

@@ -172,3 +172,94 @@ export function getWorstPerformingTopic(attempts: QuestionAttempt[]): TopicStat 
   // Otherwise top priority topic
   return stats[0];
 }
+
+export interface ChapterStat {
+  chapter: string;
+  subject: Subject;
+  yieldScore: number;
+  attempts: number;
+  correct: number;
+  accuracy: number;
+  weaknessScore: number;
+  priorityScore: number;
+  topicsCount: number;
+}
+
+export function computeChapterStats(attempts: QuestionAttempt[]): ChapterStat[] {
+  const chapterMap: Map<string, ChapterStat> = new Map();
+
+  for (const [subject, chapters] of Object.entries(CEE_SYLLABUS)) {
+    for (const chapter of chapters) {
+      const key = `${subject}:::${chapter.name}`;
+      chapterMap.set(key, {
+        chapter: chapter.name,
+        subject: subject as Subject,
+        yieldScore: chapter.yieldScore,
+        attempts: 0,
+        correct: 0,
+        accuracy: 100,
+        weaknessScore: 45,
+        priorityScore: chapter.yieldScore,
+        topicsCount: chapter.topics.length
+      });
+    }
+  }
+
+  for (const a of attempts) {
+    let chapName = a.chapter;
+    if (!chapName) {
+      for (const chapters of Object.values(CEE_SYLLABUS)) {
+        for (const ch of chapters) {
+          if (ch.topics.some(t => t.name === a.topic)) {
+            chapName = ch.name;
+            break;
+          }
+        }
+      }
+    }
+    chapName = chapName || 'General';
+    const key = `${a.subject}:::${chapName}`;
+    let stat = chapterMap.get(key);
+    if (!stat) {
+      stat = {
+        chapter: chapName,
+        subject: a.subject,
+        yieldScore: 85,
+        attempts: 0,
+        correct: 0,
+        accuracy: 0,
+        weaknessScore: 50,
+        priorityScore: 85,
+        topicsCount: 1
+      };
+      chapterMap.set(key, stat);
+    }
+    stat.attempts += 1;
+    if (a.isCorrect) stat.correct += 1;
+  }
+
+  const result: ChapterStat[] = [];
+  for (const stat of chapterMap.values()) {
+    if (stat.attempts > 0) {
+      stat.accuracy = Math.round((stat.correct / stat.attempts) * 100);
+      stat.weaknessScore = 100 - stat.accuracy;
+    } else {
+      stat.weaknessScore = 45;
+    }
+    stat.priorityScore = Math.round(stat.yieldScore * 0.55 + stat.weaknessScore * 0.45);
+    result.push(stat);
+  }
+
+  return result.sort((a, b) => b.priorityScore - a.priorityScore);
+}
+
+export function getWorstPerformingChapter(attempts: QuestionAttempt[]): ChapterStat {
+  const stats = computeChapterStats(attempts);
+  const attempted = stats.filter(s => s.attempts > 0);
+  if (attempted.length > 0) {
+    attempted.sort((a, b) => (b.weaknessScore * b.yieldScore) - (a.weaknessScore * a.yieldScore));
+    return attempted[0];
+  }
+  return stats[0];
+}
+
