@@ -11,7 +11,8 @@ import {
   Layers,
   BookOpen,
   Target,
-  Award
+  Award,
+  Search
 } from 'lucide-react';
 import { QuestionAttempt, Flashcard, Subject } from '@/types';
 import { getNextBestAction, computeTopicStats, computeChapterStats } from '@/lib/adaptive';
@@ -39,6 +40,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onStartChapterMock
 }) => {
   const [hubSubject, setHubSubject] = useState<Subject>('Physics');
+  const [hubCategory, setHubCategory] = useState<string>('All');
+  const [hubSearch, setHubSearch] = useState<string>('');
 
   const nextAction = getNextBestAction(attempts);
   const topicStats = computeTopicStats(attempts);
@@ -211,90 +214,169 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </span>
           </div>
           <span className="text-[11px] font-mono text-[var(--color-muted)]">
-            Select Subject → Pick Chapter
+            {getChaptersForSubject(hubSubject).length} Total Chapters
           </span>
         </div>
 
         {/* Subject Pills */}
         <div className="grid grid-cols-4 gap-2">
-          {(['Physics', 'Chemistry', 'Biology', 'MAT'] as const).map((sub) => (
-            <button
-              key={sub}
-              onClick={() => setHubSubject(sub)}
-              className={`py-2 px-3 rounded-lg text-xs font-semibold text-center transition-all cursor-pointer ${
-                hubSubject === sub
-                  ? 'bg-[var(--color-surface-2)] text-[var(--color-primary)] border border-[var(--color-accent)] shadow-sm'
-                  : 'bg-[var(--color-surface)] text-[var(--color-muted)] border border-[var(--color-border)] hover:text-[var(--color-primary)]'
-              }`}
-            >
-              {sub}
-            </button>
-          ))}
-        </div>
-
-        {/* Chapter Grid for the selected subject */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mt-1">
-          {hubChapters.map((ch) => {
-            const stat = chapterStats.find(s => s.chapter === ch.name);
+          {(['Physics', 'Chemistry', 'Biology', 'MAT'] as const).map((sub) => {
+            const count = getChaptersForSubject(sub).length;
             return (
-              <div
-                key={ch.name}
-                className="p-3.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-border-hover)] transition-all flex flex-col justify-between gap-3"
+              <button
+                key={sub}
+                onClick={() => {
+                  setHubSubject(sub);
+                  setHubCategory('All');
+                  setHubSearch('');
+                }}
+                className={`py-2 px-2.5 rounded-lg text-xs font-semibold text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                  hubSubject === sub
+                    ? 'bg-[var(--color-surface-2)] text-[var(--color-primary)] border border-[var(--color-accent)] shadow-sm'
+                    : 'bg-[var(--color-surface)] text-[var(--color-muted)] border border-[var(--color-border)] hover:text-[var(--color-primary)]'
+                }`}
               >
-                <div>
-                  <div className="flex items-center justify-between text-[10px] font-mono mb-1">
-                    <span className="text-[var(--color-accent)] font-semibold bg-[var(--color-accent-subtle)] px-1.5 py-0.5 rounded">
-                      Yield {ch.yieldScore}
-                    </span>
-                    <span className="text-[var(--color-muted)]">
-                      ~{ch.weightageMarks ?? Math.round(ch.yieldScore / 10)} Marks
-                    </span>
-                  </div>
-
-                  <h3 className="text-xs font-bold text-[var(--color-primary)] line-clamp-1">
-                    {ch.name}
-                  </h3>
-
-                  <div className="flex items-center gap-2 text-[10px] font-mono text-[var(--color-muted)] mt-1">
-                    {stat && stat.attempts > 0 ? (
-                      <span className={stat.accuracy >= 75 ? 'text-[var(--color-success)]' : stat.accuracy >= 50 ? 'text-[var(--color-warning)]' : 'text-[var(--color-error)]'}>
-                        {stat.accuracy}% Accuracy ({stat.attempts} solved)
-                      </span>
-                    ) : (
-                      <span className="text-[var(--color-subtle)]">Not practiced yet</span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-1.5 pt-2 border-t border-[var(--color-border)]">
-                  <button
-                    onClick={() => {
-                      if (onStartChapterPractice) {
-                        onStartChapterPractice(hubSubject, ch.name);
-                      }
-                    }}
-                    className="py-1.5 px-2 rounded-md bg-[var(--color-surface-2)] text-[var(--color-primary)] hover:border-[var(--color-accent)] border border-[var(--color-border)] text-[11px] font-semibold flex items-center justify-center gap-1 cursor-pointer transition-colors"
-                  >
-                    <Target size={11} />
-                    <span>Practice</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      if (onStartChapterMock) {
-                        onStartChapterMock(hubSubject, ch.name);
-                      }
-                    }}
-                    className="py-1.5 px-2 rounded-md bg-[var(--color-primary)] text-[var(--color-bg)] text-[11px] font-semibold flex items-center justify-center gap-1 cursor-pointer hover:opacity-90 transition-opacity"
-                  >
-                    <Zap size={11} />
-                    <span>Mock (20Q)</span>
-                  </button>
-                </div>
-              </div>
+                <span>{sub}</span>
+                <span className="text-[10px] font-mono opacity-70">{count} Ch</span>
+              </button>
             );
           })}
         </div>
+
+        {/* Search Bar & Category Sub-Filters */}
+        {(() => {
+          const allChapters = getChaptersForSubject(hubSubject);
+          const categories = Array.from(new Set(allChapters.map(c => c.category).filter(Boolean))) as string[];
+          const filteredChapters = allChapters.filter(c => {
+            if (hubCategory !== 'All' && c.category !== hubCategory) return false;
+            if (hubSearch.trim()) {
+              const q = hubSearch.toLowerCase().trim();
+              return c.name.toLowerCase().includes(q) || (c.category && c.category.toLowerCase().includes(q));
+            }
+            return true;
+          });
+
+          return (
+            <div className="flex flex-col gap-2.5">
+              {/* Search Input & Category Pills Row */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+                {/* Category Pills */}
+                {categories.length > 1 && (
+                  <div className="flex items-center gap-1 overflow-x-auto py-0.5">
+                    <button
+                      onClick={() => setHubCategory('All')}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-medium whitespace-nowrap cursor-pointer transition-colors ${
+                        hubCategory === 'All'
+                          ? 'bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold'
+                          : 'bg-[var(--color-surface-2)] text-[var(--color-muted)] hover:text-[var(--color-primary)]'
+                      }`}
+                    >
+                      All ({allChapters.length})
+                    </button>
+                    {categories.map(cat => {
+                      const catCount = allChapters.filter(c => c.category === cat).length;
+                      return (
+                        <button
+                          key={cat}
+                          onClick={() => setHubCategory(cat)}
+                          className={`px-2.5 py-1 rounded-md text-[11px] font-medium whitespace-nowrap cursor-pointer transition-colors ${
+                            hubCategory === cat
+                              ? 'bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold'
+                              : 'bg-[var(--color-surface-2)] text-[var(--color-muted)] hover:text-[var(--color-primary)]'
+                          }`}
+                        >
+                          {cat} ({catCount})
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Instant Search Filter */}
+                <div className="relative min-w-[200px]">
+                  <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
+                  <input
+                    type="text"
+                    value={hubSearch}
+                    onChange={(e) => setHubSearch(e.target.value)}
+                    placeholder={`Search ${hubSubject} chapters...`}
+                    className="w-full pl-8 pr-3 py-1 text-xs rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-primary)] focus:outline-none focus:border-[var(--color-accent)] placeholder:text-[var(--color-muted)] font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Chapter Cards Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mt-1 max-h-[560px] overflow-y-auto pr-1">
+                {filteredChapters.map((ch) => {
+                  const stat = chapterStats.find(s => s.chapter === ch.name);
+                  return (
+                    <div
+                      key={ch.name}
+                      className="p-3.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-border-hover)] transition-all flex flex-col justify-between gap-3"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between text-[10px] font-mono mb-1">
+                          <span className="text-[var(--color-accent)] font-semibold bg-[var(--color-accent-subtle)] px-1.5 py-0.5 rounded">
+                            {ch.category ? `${ch.category} · ` : ''}Yield {ch.yieldScore}
+                          </span>
+                          <span className="text-[var(--color-muted)]">
+                            ~{ch.weightageMarks ?? Math.round(ch.yieldScore / 10)} Marks
+                          </span>
+                        </div>
+
+                        <h3 className="text-xs font-bold text-[var(--color-primary)] line-clamp-2 leading-snug">
+                          {ch.name}
+                        </h3>
+
+                        <div className="flex items-center gap-2 text-[10px] font-mono text-[var(--color-muted)] mt-1.5">
+                          {stat && stat.attempts > 0 ? (
+                            <span className={stat.accuracy >= 75 ? 'text-[var(--color-success)] font-semibold' : stat.accuracy >= 50 ? 'text-[var(--color-warning)] font-semibold' : 'text-[var(--color-error)] font-semibold'}>
+                              {stat.accuracy}% Accuracy ({stat.attempts} solved)
+                            </span>
+                          ) : (
+                            <span className="text-[var(--color-subtle)]">Not practiced yet</span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-1.5 pt-2 border-t border-[var(--color-border)]">
+                        <button
+                          onClick={() => {
+                            if (onStartChapterPractice) {
+                              onStartChapterPractice(hubSubject, ch.name);
+                            }
+                          }}
+                          className="py-1.5 px-2 rounded-md bg-[var(--color-surface-2)] text-[var(--color-primary)] hover:border-[var(--color-accent)] border border-[var(--color-border)] text-[11px] font-semibold flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                        >
+                          <Target size={11} />
+                          <span>Practice</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            if (onStartChapterMock) {
+                              onStartChapterMock(hubSubject, ch.name);
+                            }
+                          }}
+                          className="py-1.5 px-2 rounded-md bg-[var(--color-primary)] text-[var(--color-bg)] text-[11px] font-semibold flex items-center justify-center gap-1 cursor-pointer hover:opacity-90 transition-opacity"
+                        >
+                          <Zap size={11} />
+                          <span>Mock (20Q)</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {filteredChapters.length === 0 && (
+                  <div className="col-span-full p-8 text-center rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-xs text-[var(--color-muted)]">
+                    No chapters matching &quot;{hubSearch}&quot; in {hubSubject}.
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Special Modes Quick Bar */}

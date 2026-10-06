@@ -49,8 +49,9 @@ export const ExamView: React.FC<ExamViewProps> = ({
   const [examType, setExamType] = useState<'full_200' | 'rapid_50' | 'chapter'>(initialExamType || 'chapter');
   const [selectedSubject, setSelectedSubject] = useState<Subject>(initialSubject || 'Physics');
   const [selectedChapter, setSelectedChapter] = useState<string>(
-    initialChapter || (CEE_SYLLABUS[initialSubject || 'Physics']?.[0]?.name || 'Electrostatics & Capacitance')
+    initialChapter || (CEE_SYLLABUS[initialSubject || 'Physics']?.[0]?.name || 'Physical Quantities, Vectors & Dimensions')
   );
+  const [chapterSearch, setChapterSearch] = useState<string>('');
   
   const paletteDialogId = useId();
 
@@ -59,6 +60,7 @@ export const ExamView: React.FC<ExamViewProps> = ({
     setSelectedSubject(subj);
     const firstChap = CEE_SYLLABUS[subj]?.[0]?.name || '';
     setSelectedChapter(firstChap);
+    setChapterSearch('');
   };
 
   // Auto-launch if initialChapter was explicitly provided
@@ -431,36 +433,55 @@ export const ExamView: React.FC<ExamViewProps> = ({
               </div>
 
               <div>
-                <span className="text-xs font-mono text-[var(--color-muted)] uppercase tracking-wider block mb-2">
-                  Step 3: Select Chapter for Mock Test
-                </span>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-mono text-[var(--color-muted)] uppercase tracking-wider block">
+                    Step 3: Select Chapter for Mock Test ({availableChapters.length} Chapters)
+                  </span>
+                </div>
+
+                <div className="relative mb-2">
+                  <input
+                    type="text"
+                    value={chapterSearch}
+                    onChange={(e) => setChapterSearch(e.target.value)}
+                    placeholder={`Filter ${selectedSubject} chapters...`}
+                    className="w-full px-3 py-1.5 text-xs rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-primary)] focus:outline-none focus:border-[var(--color-accent)] placeholder:text-[var(--color-muted)] font-mono"
+                  />
+                </div>
+
                 <div className="grid grid-cols-1 gap-2 max-h-56 overflow-y-auto pr-1">
-                  {availableChapters.map(chap => {
-                    const isSelected = selectedChapter === chap.name;
-                    return (
-                      <button
-                        key={chap.name}
-                        onClick={() => setSelectedChapter(chap.name)}
-                        className={`p-3 rounded-lg border text-left transition-colors flex items-center justify-between cursor-pointer ${
-                          isSelected
-                            ? 'border-[var(--color-accent)] bg-[var(--color-accent-subtle)] text-[var(--color-primary)] ring-1 ring-[var(--color-accent)]'
-                            : 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-muted)] hover:text-[var(--color-primary)]'
-                        }`}
-                      >
-                        <div className="min-w-0 pr-2">
-                          <span className={`text-xs block font-medium truncate ${isSelected ? 'text-[var(--color-primary)] font-semibold' : ''}`}>
-                            {chap.name}
+                  {availableChapters
+                    .filter(chap => {
+                      if (!chapterSearch.trim()) return true;
+                      const q = chapterSearch.toLowerCase().trim();
+                      return chap.name.toLowerCase().includes(q) || (chap.category && chap.category.toLowerCase().includes(q));
+                    })
+                    .map(chap => {
+                      const isSelected = selectedChapter === chap.name;
+                      return (
+                        <button
+                          key={chap.name}
+                          onClick={() => setSelectedChapter(chap.name)}
+                          className={`p-3 rounded-lg border text-left transition-colors flex items-center justify-between cursor-pointer ${
+                            isSelected
+                              ? 'border-[var(--color-accent)] bg-[var(--color-accent-subtle)] text-[var(--color-primary)] ring-1 ring-[var(--color-accent)]'
+                              : 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-muted)] hover:text-[var(--color-primary)]'
+                          }`}
+                        >
+                          <div className="min-w-0 pr-2">
+                            <span className={`text-xs block font-medium truncate ${isSelected ? 'text-[var(--color-primary)] font-semibold' : ''}`}>
+                              {chap.name}
+                            </span>
+                            <span className="text-[10px] font-mono text-[var(--color-subtle)]">
+                              {chap.category ? `${chap.category} · ` : ''}{chap.topics.length} core topics
+                            </span>
+                          </div>
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[var(--color-surface-2)] border border-[var(--color-border)] shrink-0 font-semibold text-[var(--color-warning)]">
+                            Yield {chap.yieldScore}
                           </span>
-                          <span className="text-[10px] font-mono text-[var(--color-subtle)]">
-                            {chap.topics.length} core topics
-                          </span>
-                        </div>
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[var(--color-surface-2)] border border-[var(--color-border)] shrink-0 font-semibold text-[var(--color-warning)]">
-                          Yield {chap.yieldScore}
-                        </span>
-                      </button>
-                    );
-                  })}
+                        </button>
+                      );
+                    })}
                 </div>
               </div>
             </div>

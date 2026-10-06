@@ -1,5 +1,6 @@
 import { Question, Subject, Difficulty } from '@/types';
 import { INITIAL_QUESTION_BANK } from './questionBank';
+import { findChapterByName } from './syllabus';
 
 interface MutationRule {
   subject: Subject;
@@ -187,12 +188,21 @@ export function generateDynamicQuestion(
 
   // Fallback to parameterized selection from our verified question bank
   const pool = INITIAL_QUESTION_BANK.filter(q => q.subject === subject);
-  const chapterPool = chapter ? pool.filter(q => q.chapter.toLowerCase() === chapter.toLowerCase()) : [];
+  const chapterPool = chapter ? pool.filter(q => {
+    const qc = q.chapter.toLowerCase();
+    const c = chapter.toLowerCase();
+    const qt = q.topic.toLowerCase();
+    return qc === c || qc.includes(c) || c.includes(qc) || qt.includes(c) || c.includes(qt);
+  }) : [];
   const effectivePool = chapterPool.length > 0 ? chapterPool : pool;
 
   const base = (topic ? effectivePool.find(q => q.topic.toLowerCase().includes(topic.toLowerCase())) : null)
     || effectivePool[salt % effectivePool.length]
     || INITIAL_QUESTION_BANK[0];
+
+  // If chapter definition exists in syllabus, ensure topic and concept grounding matches the chapter
+  const chapterDef = chapter ? findChapterByName(chapter) : undefined;
+  const chapterTopic = chapterDef?.topics?.[salt % (chapterDef.topics.length || 1)];
 
   return {
     ...base,
@@ -200,10 +210,15 @@ export function generateDynamicQuestion(
     sourceType: isVariation ? 'ai_variation' : 'ai_generated',
     verificationStatus: 'ai_generated',
     difficulty,
+    subject,
     chapter: chapter || base.chapter,
+    topic: chapterTopic?.name || base.topic,
     originalPastQuestionId: isVariation && baseQuestion ? baseQuestion.id : base.id,
-    question: isVariation 
-      ? `[Advanced Multi-Constraint Variation] ${base.question}`
-      : base.question
+    question: chapterTopic && chapterPool.length === 0
+      ? `[${chapterDef?.name} · High-Yield Focus] ${base.question}`
+      : isVariation 
+        ? `[Advanced Multi-Constraint Variation] ${base.question}`
+        : base.question,
+    commonTrap: chapterTopic?.commonTraps?.[0] || base.commonTrap
   };
 }

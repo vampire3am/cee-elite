@@ -14,7 +14,8 @@ import {
   CheckCircle2, 
   AlertCircle,
   Zap,
-  BookOpen
+  BookOpen,
+  Search
 } from 'lucide-react';
 
 interface StatsViewProps {
@@ -36,6 +37,7 @@ export const StatsView: React.FC<StatsViewProps> = ({
 }) => {
   const [importStatus, setImportStatus] = useState<string | null>(null);
   const [chapterFilterSubject, setChapterFilterSubject] = useState<Subject | 'All'>('All');
+  const [chapterMatrixSearch, setChapterMatrixSearch] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const topicStats = computeTopicStats(attempts);
@@ -290,9 +292,27 @@ export const StatsView: React.FC<StatsViewProps> = ({
           </div>
         </div>
 
-        <div className="border border-[var(--color-border)] rounded-xl overflow-hidden text-xs">
+        {/* Search input for matrix */}
+        <div className="relative">
+          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
+          <input
+            type="text"
+            value={chapterMatrixSearch}
+            onChange={(e) => setChapterMatrixSearch(e.target.value)}
+            placeholder="Search chapter in matrix..."
+            className="w-full pl-8 pr-3 py-1 text-xs rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-primary)] focus:outline-none focus:border-[var(--color-accent)] placeholder:text-[var(--color-muted)] font-mono"
+          />
+        </div>
+
+        <div className="border border-[var(--color-border)] rounded-xl overflow-hidden text-xs max-h-[520px] overflow-y-auto">
           <div className="divide-y divide-[var(--color-border)]">
-            {filteredChapterStats.map((ch) => (
+            {filteredChapterStats
+              .filter(ch => {
+                if (!chapterMatrixSearch.trim()) return true;
+                const q = chapterMatrixSearch.toLowerCase().trim();
+                return ch.chapter.toLowerCase().includes(q) || ch.subject.toLowerCase().includes(q);
+              })
+              .map((ch) => (
               <div
                 key={ch.chapter}
                 className="p-3.5 bg-[var(--color-surface)] flex flex-col sm:flex-row sm:items-center justify-between gap-3"

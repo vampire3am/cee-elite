@@ -6,6 +6,7 @@ import { QuestionCard } from '../QuestionCard';
 import { db } from '@/lib/db';
 import { getChaptersForSubject, getAllChapters, CEE_SYLLABUS } from '@/lib/syllabus';
 import { computeChapterStats } from '@/lib/adaptive';
+import { generateDynamicQuestion } from '@/lib/proceduralGenerator';
 import { 
   Sparkles, 
   RotateCcw, 
@@ -15,7 +16,8 @@ import {
   Award,
   ChevronRight,
   Zap,
-  Target
+  Target,
+  Search
 } from 'lucide-react';
 
 interface PracticeViewProps {
@@ -55,6 +57,8 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
   const [allBankQuestions, setAllBankQuestions] = useState<Question[]>([]);
   const [attempts, setAttempts] = useState<QuestionAttempt[]>([]);
   const [viewMode, setViewMode] = useState<'practice' | 'chapters'>(initialChapter ? 'practice' : 'practice');
+  const [chapterCategoryFilter, setChapterCategoryFilter] = useState<string>('All');
+  const [chapterSearch, setChapterSearch] = useState<string>('');
 
   // Update when initialChapter changes externally
   useEffect(() => {
@@ -88,17 +92,40 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
       filtered = filtered.filter(q => q.subject === selectedSubject);
     }
     if (selectedChapter !== 'All') {
-      filtered = filtered.filter(q => q.chapter === selectedChapter);
+      const exact = filtered.filter(q => q.chapter.toLowerCase() === selectedChapter.toLowerCase());
+      if (exact.length > 0) {
+        filtered = exact;
+      } else {
+        const fuzzy = filtered.filter(q => {
+          const qc = q.chapter.toLowerCase();
+          const sc = selectedChapter.toLowerCase();
+          const qt = q.topic.toLowerCase();
+          return qc.includes(sc) || sc.includes(qc) || qt.includes(sc) || sc.includes(qt);
+        });
+        if (fuzzy.length > 0) {
+          filtered = fuzzy;
+        } else {
+          // Auto-generate 5 questions for this chapter so student immediately has practice material
+          const targetSubj = selectedSubject === 'All' ? 'Physics' : selectedSubject;
+          const proceduralSet: Question[] = [];
+          for (let i = 0; i < 5; i++) {
+            proceduralSet.push(generateDynamicQuestion(targetSubj, selectedChapter, undefined, selectedDifficulty === 'All' ? 'hard' : selectedDifficulty));
+          }
+          filtered = proceduralSet;
+        }
+      }
     }
     if (selectedDifficulty !== 'All') {
-      filtered = filtered.filter(q => q.difficulty === selectedDifficulty);
+      const diffMatches = filtered.filter(q => q.difficulty === selectedDifficulty);
+      if (diffMatches.length > 0) filtered = diffMatches;
     }
     if (initialTopic) {
       const topicMatches = filtered.filter(q => q.topic.toLowerCase().includes(initialTopic.toLowerCase()));
       if (topicMatches.length > 0) filtered = topicMatches;
     }
     if (initialMode === 'past') {
-      filtered = filtered.filter(q => q.sourceType === 'verified_past');
+      const pastMatches = filtered.filter(q => q.sourceType === 'verified_past');
+      if (pastMatches.length > 0) filtered = pastMatches;
     }
 
     // Shuffle questions slightly for variety
@@ -289,9 +316,20 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
   const chapterStats = computeChapterStats(attempts);
 
   // Get displayed chapters for chapter explorer
-  const displayedChapters = selectedSubject === 'All' 
+  const baseChapters = selectedSubject === 'All' 
     ? getAllChapters() 
     : getChaptersForSubject(selectedSubject).map(c => ({ ...c, subject: selectedSubject }));
+
+  const categories = Array.from(new Set(baseChapters.map(c => c.category).filter(Boolean))) as string[];
+
+  const displayedChapters = baseChapters.filter(c => {
+    if (chapterCategoryFilter !== 'All' && c.category !== chapterCategoryFilter) return false;
+    if (chapterSearch.trim()) {
+      const q = chapterSearch.toLowerCase().trim();
+      return c.name.toLowerCase().includes(q) || (c.category && c.category.toLowerCase().includes(q));
+    }
+    return true;
+  });
 
   return (
     <div className="w-full max-w-3xl mx-auto flex flex-col gap-5 pb-24 md:pb-12">
@@ -303,6 +341,8 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
               key={subj}
               onClick={() => {
                 setSelectedSubject(subj);
+                setChapterCategoryFilter('All');
+                setChapterSearch('');
                 if (subj !== 'All' && selectedChapter !== 'All') {
                   const subjectChapters = getChaptersForSubject(subj).map(c => c.name);
                   if (!subjectChapters.includes(selectedChapter)) {
@@ -332,7 +372,7 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
             }`}
           >
             <BookOpen size={13} />
-            <span>{viewMode === 'chapters' ? 'Back to Questions' : 'Browse Chapters'}</span>
+            <span>{viewMode === 'chapters' ? 'Back to Questions' : `Browse Chapters (${baseChapters.length})`}</span>
           </button>
         </div>
       </div>
@@ -340,14 +380,60 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
       {/* Chapter Explorer Grid View */}
       {viewMode === 'chapters' ? (
         <div className="flex flex-col gap-4">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-mono uppercase tracking-wider text-[var(--color-muted)]">
-              {selectedSubject === 'All' ? 'All Official Syllabus Chapters' : `${selectedSubject} Chapters`}
-            </span>
-            <span className="text-[11px] font-mono text-[var(--color-subtle)]">
-              {displayedChapters.length} Chapters
-            </span>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+            <div>
+              <span className="text-xs font-mono uppercase tracking-wider text-[var(--color-primary)] font-semibold block">
+                {selectedSubject === 'All' ? 'All Official Syllabus Chapters' : `${selectedSubject} Chapters`}
+              </span>
+              <span className="text-[11px] font-mono text-[var(--color-muted)]">
+                Showing {displayedChapters.length} of {baseChapters.length} Chapters
+              </span>
+            </div>
+
+            {/* Instant Search Bar */}
+            <div className="relative min-w-[200px]">
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
+              <input
+                type="text"
+                value={chapterSearch}
+                onChange={(e) => setChapterSearch(e.target.value)}
+                placeholder="Search chapters..."
+                className="w-full pl-8 pr-3 py-1 text-xs rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-primary)] focus:outline-none focus:border-[var(--color-accent)] placeholder:text-[var(--color-muted)] font-mono"
+              />
+            </div>
           </div>
+
+          {/* Category Filter Pills */}
+          {categories.length > 1 && (
+            <div className="flex items-center gap-1.5 overflow-x-auto py-1">
+              <button
+                onClick={() => setChapterCategoryFilter('All')}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-medium whitespace-nowrap cursor-pointer transition-colors ${
+                  chapterCategoryFilter === 'All'
+                    ? 'bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold'
+                    : 'bg-[var(--color-surface)] text-[var(--color-muted)] hover:text-[var(--color-primary)] border border-[var(--color-border)]'
+                }`}
+              >
+                All ({baseChapters.length})
+              </button>
+              {categories.map(cat => {
+                const count = baseChapters.filter(c => c.category === cat).length;
+                return (
+                  <button
+                    key={cat}
+                    onClick={() => setChapterCategoryFilter(cat)}
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-medium whitespace-nowrap cursor-pointer transition-colors ${
+                      chapterCategoryFilter === cat
+                        ? 'bg-[var(--color-primary)] text-[var(--color-bg)] font-semibold'
+                        : 'bg-[var(--color-surface)] text-[var(--color-muted)] hover:text-[var(--color-primary)] border border-[var(--color-border)]'
+                    }`}
+                  >
+                    {cat} ({count})
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {displayedChapters.map((ch) => {
